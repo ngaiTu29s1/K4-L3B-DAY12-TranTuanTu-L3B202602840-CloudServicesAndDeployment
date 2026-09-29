@@ -39,9 +39,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build image
-        run: |
-          docker build -t day12-agent:ci .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+          tags: |
+            ngaitu29s1/day12-agent:latest
+            ngaitu29s1/day12-agent:${{ github.sha }}
 
   deploy:
     name: Deploy
@@ -49,7 +64,18 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger deploy
+      - name: Trigger n8n Deployment Webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+          DEPLOY_TOKEN: ${{ secrets.N8N_DEPLOY_TOKEN }}
         run: |
-          echo "Simulating deployment with secret token: ${{ secrets.DEPLOY_TOKEN }}"
-          echo "All tests and builds passed on main branch."
+          if [ -n "$WEBHOOK_URL" ]; then
+            echo "Triggering n8n deployment webhook on server..."
+            curl -fsSL -X POST "$WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -H "X-Deploy-Token: $DEPLOY_TOKEN" \
+              -d "{\"event\": \"deploy\", \"repository\": \"${{ github.repository }}\", \"commit\": \"${{ github.sha }}\"}"
+            echo "Deployment webhook sent successfully."
+          else
+            echo "N8N_WEBHOOK_URL secret is not set yet. Skipping live trigger."
+          fi
