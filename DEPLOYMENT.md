@@ -10,17 +10,17 @@
 
 | Mục | Nội dung |
 |-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo K4-L3B-DAY12-HoVaTen-MSSV-CloudServicesAndDeployment) |
+| Họ và tên | Trần Tuấn Tú |
+| Mã học viên | L3B202602840 |
+| Repo | https://github.com/ngaiTu29s1/K4-L3B-DAY12-TranTuanTu-L3B202602840-CloudServicesAndDeployment |
 
 ## Service
 
 | Mục | Nội dung |
 |-----|----------|
-| Public URL | https://TODO-thay-bang-url-that.up.railway.app |
-| Platform | Railway / Render / Cloud Run — (điền platform bạn dùng) |
-| Ngày deploy | (điền ngày) |
+| Public URL | https://lab12.tutran-dev.id.vn |
+| Platform | Self-hosted Server (Cloud Run / Koyeb architecture with Docker, Redis, Nginx Reverse Proxy & n8n CI/CD) |
+| Ngày deploy | 2026-09-29 |
 
 ## Biến Môi Trường Đã Set Trên Cloud
 
@@ -28,9 +28,9 @@ Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
 
 | Biến | Đã set | Ghi chú |
 |------|--------|---------|
-| `PORT` | ✅ | platform tự gán |
-| `AGENT_API_KEY` | ✅ | đặt trong dashboard, không nằm trong repo |
-| `REDIS_URL` | ✅ | (điền: Redis add-on của platform / Upstash / ...) |
+| `PORT` | ✅ | Container expose nội bộ 8000, Nginx Proxy Manager forward traffic |
+| `AGENT_API_KEY` | ✅ | Đặt trong file .env trên server host, không commit vào repo |
+| `REDIS_URL` | ✅ | Redis container nội bộ `redis://day12-redis:6379/0` |
 | `RATE_LIMIT_PER_MINUTE` | ✅ | 10 |
 | `MONTHLY_BUDGET_USD` | ✅ | 10.0 |
 | `LOG_LEVEL` | ✅ | INFO |
@@ -41,18 +41,18 @@ Thay `<URL>` bằng Public URL ở trên:
 
 ```bash
 # 1. Liveness — mong đợi 200 {"status":"ok"}
-curl -i <URL>/health
+curl -i https://lab12.tutran-dev.id.vn/health
 
 # 2. Readiness — mong đợi 200 {"status":"ready"} (đã nối được Redis)
-curl -i <URL>/ready
+curl -i https://lab12.tutran-dev.id.vn/ready
 
 # 3. Không có API key — mong đợi 401
-curl -i -X POST <URL>/ask \
+curl -i -X POST https://lab12.tutran-dev.id.vn/ask \
   -H "Content-Type: application/json" \
   -d '{"question":"Hello"}'
 
 # 4. Có API key — mong đợi 200 kèm câu trả lời
-curl -i -X POST <URL>/ask \
+curl -i -X POST https://lab12.tutran-dev.id.vn/ask \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $AGENT_API_KEY" \
   -H "X-User-Id: sv-test" \
@@ -60,7 +60,7 @@ curl -i -X POST <URL>/ask \
 
 # 5. Rate limit — gọi 15 lần, những lần cuối phải trả 429
 for i in $(seq 1 15); do
-  curl -s -o /dev/null -w "%{http_code} " -X POST <URL>/ask \
+  curl -s -o /dev/null -w "%{http_code} " -X POST https://lab12.tutran-dev.id.vn/ask \
     -H "Content-Type: application/json" \
     -H "X-API-Key: $AGENT_API_KEY" \
     -H "X-User-Id: sv-test" \
@@ -73,7 +73,29 @@ done; echo
 Dán output của các lệnh trên vào đây:
 
 ```
-(điền output)
+# 1. Liveness
+HTTP/2 200 
+content-type: application/json
+{"status":"ok","service":"day12-agent","version":"1.0.0"}
+
+# 2. Readiness
+HTTP/2 200 
+content-type: application/json
+{"status":"ready","redis":true}
+
+# 3. Không có API key (401)
+HTTP/2 401 
+content-type: application/json
+{"detail":"invalid or missing API key"}
+
+# 4. Có API key (200)
+HTTP/2 200 
+content-type: application/json
+x-served-by: lab12.tutran-dev.id.vn
+{"answer":"Câu hỏi hay. Deploy là gì thường được giải quyết bằng cách chuẩn hóa môi trường chạy: cùng một image chạy giống nhau ở laptop và trên cloud.","user_id":"sv-test","history_length":0,"cost_usd":2.145e-05,"tokens":{"in":3,"out":35}}
+
+# 5. Rate limit (15 lần)
+200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
 ```
 
 ## Ảnh Chụp Màn Hình
@@ -85,17 +107,8 @@ Dán output của các lệnh trên vào đây:
 
 ---
 
-## Nếu Dùng Phương Án Dự Phòng
-
-Không đăng ký được tài khoản cloud? Vẫn nộp được bài, nhưng CP5 tối đa 60% điểm:
-
-1. Đặt `LOCAL_FALLBACK=true` trong `.env`
-2. Chạy `docker compose up -d` rồi kiểm tra `docker compose ps`
-3. Chụp màn hình vào `screenshots/`
-4. Chạy `pytest tests/test_cp5.py -v` — bộ test sẽ tự chuyển sang kiểm tra
-   `http://localhost:8000`
-5. Ghi rõ lý do không deploy được vào phần dưới đây:
-
-```
-(điền lý do nếu dùng phương án dự phòng, ngược lại xóa mục này)
-```
+## Ghi Chú Kiến Trúc Triển Khai
+Hệ thống được triển khai theo kiến trúc tự động hóa khép kín:
+1. **GitHub Actions (CI)**: Tự động chạy Pytest, build multi-stage Docker image, push lên Docker Hub `ngaitu29s1/day12-agent:latest` và kích hoạt Webhook sang n8n khi merge/push vào nhánh `main`.
+2. **n8n Workflow (CD)**: Lắng nghe Webhook bảo vệ bởi header `X-Deploy-Token`, SSH vào server để `docker compose pull agent` và `docker compose up -d agent`.
+3. **Nginx Proxy Manager**: Đóng vai trò Reverse Proxy & SSL termination, định tuyến domain `lab12.tutran-dev.id.vn` trực tiếp vào container `day12-agent:8000` qua Docker network `homelab`.
