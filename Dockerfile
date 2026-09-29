@@ -34,17 +34,21 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 # Copy dependencies từ stage builder
 COPY --from=builder /install /usr/local
 
 # Tạo non-root user appuser
 RUN useradd --create-home --uid 10001 appuser
 
-# Copy mã nguồn ứng dụng
-COPY app ./app
-COPY utils ./utils
+# Copy mã nguồn ứng dụng với quyền appuser
+COPY --chown=appuser:appuser app ./app
+COPY --chown=appuser:appuser utils ./utils
 
 USER appuser
+
 
 EXPOSE 8000
 
