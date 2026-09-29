@@ -31,7 +31,7 @@ from .rate_limiter import RateLimiter
 from .store import ConversationStore, get_redis_client
 
 SERVICE_NAME = "day12-agent"
-SERVICE_VERSION = "1.0.0"
+SERVICE_VERSION = "1.0.1"
 
 
 # ─────────────────────────────────────────────────────────────
